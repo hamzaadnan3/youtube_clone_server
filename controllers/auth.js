@@ -1,0 +1,50 @@
+import mongoose from "mongoose";
+import User from "../models/User.js";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
+import {createError} from "../error.js";
+
+//sign up handler
+export const Signup = async (req, res, next) => {
+  try {
+    const salt = bcrypt.genSaltSync(10);
+    const hashedPassword = bcrypt.hashSync(req.body.password, salt);
+
+    const newUser = new User({ ...req.body, password: hashedPassword });
+
+    await newUser.save();
+
+    res.status(201).json("User is created successfully");
+  } catch (error) {
+    next(error);
+  }
+};
+
+//signin handler
+export const Signin = async (req, res, next) => {
+  try {
+    const user = await User.findOne({ name: req.body.name });
+
+    if (!user) return next(createError(404, "User not found"));
+
+    const isCorrectPassword = await bcrypt.compare(
+      req.body.password,
+      user.password
+    );
+
+    if (!isCorrectPassword)
+      return next(createError(400, "Invalid Credentials"));
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET);
+    const { password, ...otherDetails } = user._doc;
+
+    res
+      .status(200)
+      .cookie("access_token", token, {
+        httpOnly: true,
+      })
+      .json(otherDetails);
+  } catch (error) {
+    next(error);
+  }
+};
